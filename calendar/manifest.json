@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Jitsi Meetings",
-  "description": "A simple extension that allows you to schedule Jitsi Meetings.",
-  "version": "0.2.8",
+  "name": "Jitsi Meetings Extension for Google Calendar",
+  "description": "A simple extension that allows you to schedule Jitsi Meetings. This is a custom fork of jitsi/jidesha version 0.2.8",
+  "version": "0.2.9",
   "minimum_chrome_version": "88",
   "icons": {
     "16": "jitsi-logo-16x16.png",
@@ -12,24 +12,18 @@
   "host_permissions": [
       "https://calendar.google.com/*"
   ],
-  "externally_connectable": {
-      "matches": [
-        "*://meet.jit.si/*"
-      ]
-  },
   "content_scripts": [
     {
-      "matches": ["https://calendar.google.com/calendar/*", "https://outlook.live.com/owa/*"],
+      "matches": ["https://calendar.google.com/calendar/*"],
       "js": ["jquery.js", "RandomUtil.js", "RoomnameGenerator.js", "meet-calendar.js"],
-      "css": ["/css/all.css"],
+      "css": ["/css/all.css", "/css/custom.css"],
       "all_frames" : false,
       "run_at" : "document_end"
     }
   ],
   "web_accessible_resources": [{
     "matches": [
-      "https://calendar.google.com/*",
-      "https://outlook.live.com/*"
+      "https://calendar.google.com/*"
     ],
     "resources": [
       "jitsi-logo-48x48.png",
@@ -41,5 +35,9 @@
   "action": {
     "default_title": "Create Jitsi Meetings",
     "default_popup": "popup.html"
-  }
+  },
+  "options_page": "options.html",
+  "permissions": [
+    "storage"
+  ]
 }

@@ -1,11 +1,69 @@
-const BASE_DOMAIN = "meet.jit.si";
-const BASE_URL = "https://" + BASE_DOMAIN + "/";
-const APP_NAME = "Jitsi";
+let BASE_DOMAIN = "meet.osaspace.it";
+let BASE_URL = "https://" + BASE_DOMAIN + "/";
+let APP_NAME = "Jitsi";
 const NUMBER_RETRIEVE_SCRIPT = false;
 const CONFERENCE_MAPPER_SCRIPT = false;
 
+// Variabili per i testi personalizzabili
+let ADD_BUTTON_TEXT;
+let JOIN_BUTTON_TEXT;
+let INVITE_MESSAGE;
+
+// Carica le impostazioni personalizzate
+function loadSettings() {
+    // Aggiungi un timestamp per evitare la cache
+    const timestamp = new Date().getTime();
+    chrome.storage.sync.get({
+        baseDomain: 'meet.osaspace.it',
+        addButtonText: ' Aggiungi stanza OSA ',
+        joinButtonText: ' Collegati alla stanza OSA ',
+        inviteMessage: 'Clicca sul link seguente per collegarti alla stanza:'
+    }, (items) => {
+        BASE_DOMAIN = items.baseDomain;
+        BASE_URL = "https://" + BASE_DOMAIN + "/";
+        ADD_BUTTON_TEXT = items.addButtonText;
+        JOIN_BUTTON_TEXT = items.joinButtonText;
+        INVITE_MESSAGE = items.inviteMessage;
+        
+        // Aggiorna i pulsanti esistenti
+        updateExistingButtons();
+    });
+}
+
+// Aggiorna i pulsanti esistenti con i nuovi testi
+function updateExistingButtons() {
+    // Aggiorna il pulsante principale
+    const button = $('#jitsi_button_text');
+    if (button.length > 0) {
+        const href = button.attr('href');
+        if (href === '#') {
+            button.html(ADD_BUTTON_TEXT);
+        } else {
+            button.html(JOIN_BUTTON_TEXT);
+        }
+    }
+
+    // Aggiorna il pulsante nella finestra di dialogo rapida
+    const quickAddButton = $('.bubble #jitsi_button_quick_add');
+    if (quickAddButton.length > 0) {
+        quickAddButton.html(ADD_BUTTON_TEXT);
+    }
+}
+
+// Carica le impostazioni all'avvio
+loadSettings();
+
+// Ascolta i cambiamenti delle impostazioni
+chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'sync') {
+        if (changes.addButtonText || changes.joinButtonText || changes.inviteMessage || changes.baseDomain) {
+            loadSettings();
+        }
+    }
+});
+
 //A text to be used when adding info to the location field.
-const LOCATION_TEXT = APP_NAME + ' Meeting';
+const LOCATION_TEXT = 'Jitsi Meeting';
 
 let generateRoomNameAsDigits = false;
 
@@ -94,7 +152,6 @@ class EventContainer {
      * Updates meetingId, if there is meetingId set it, if not generate it.
      */
     updateMeetingId() {
-
         if (!this.isButtonPresent()) {
             // there is no button present we will add it, so we will clean
             // the state of the EventContainer, so we can update all values.
@@ -128,7 +185,7 @@ class EventContainer {
 
             // there can be ',' after the meeting, normally added when adding
             // physical rooms to the meeting
-            var regexp = /([a-zA-Z]+).*/g;
+            var regexp = /([a-zA-Z0-9\-]+).*/g;
             var match = regexp.exec(resMeetingId);
             if (match && match.length > 1)
                 resMeetingId = match[1];
@@ -136,12 +193,28 @@ class EventContainer {
             this.meetingId = resMeetingId;
         }
         else {
-
-            if (generateRoomNameAsDigits) {
-                this.meetingId = randomDigitString(10);
+            let eventTitle = '';
+            // Cerca prima nel popup rapido
+            let titleInput = document.querySelector('input[aria-label="Aggiungi titolo"], input[placeholder="Aggiungi titolo"]');
+            // Poi cerca in altre opzioni (modalità avanzata)
+            if (!titleInput) {
+                titleInput = document.querySelector('input#xTiIn, input[aria-label="Titolo"], input[placeholder="Aggiungi titolo"], input[jsname="YPqjbf"]');
             }
-            else
+            if (titleInput && titleInput.value.trim() !== '') {
+                // Rimuovi caratteri speciali e sostituisci spazi con trattini
+                eventTitle = titleInput.value.trim()
+                    .replace(/[^a-zA-Z0-9\s-]/g, '') // Rimuovi caratteri speciali
+                    .replace(/\s+/g, '-')            // Sostituisci spazi con trattini
+                    .toLowerCase();                   // Converti in minuscolo
+            }
+            if (eventTitle && eventTitle !== 'undefined') {
+                this.meetingId = eventTitle;
+            } else if (generateRoomNameAsDigits) {
+                this.meetingId = randomDigitString(10);
+            } else {
+                // Se non c'è un titolo valido, genera un nome casuale
                 this.meetingId = generateRoomWithoutSeparator();
+            }
 
             if(NUMBER_RETRIEVE_SCRIPT) {
                 // queries a predefined location for settings
@@ -194,8 +267,17 @@ class EventContainer {
             '<div id="jitsi_button" ' +
                 'class="goog-inline-block jfk-button jfk-button-action ' +
                     'jfk-button-clear-outline">' +
-                '<a href="#" style="color: white"></a>' +
+                '<a href="#" id="jitsi_button_text" style="color: white !important; text-decoration: none !important; font-weight: normal !important; display: inline-block !important;">' + 
+                    ADD_BUTTON_TEXT + 
+                '</a>' +
             '</div>');
+        
+        // Assicurati che il testo sia impostato correttamente
+        const button = $('#jitsi_button_text');
+        if (button.length > 0) {
+            button.html(ADD_BUTTON_TEXT);
+        }
+        
         description.update(this.location);
     }
 }
@@ -264,6 +346,11 @@ class Description {
      */
     clickAddMeeting(isDescriptionUpdated, location) {
         if (!isDescriptionUpdated) {
+            // Forza l'aggiornamento del meetingId se non è presente
+            if (!this.event.meetingId) {
+                this.event.updateMeetingId();
+            }
+            
             // Build the invitation content
             if (CONFERENCE_MAPPER_SCRIPT) {
                 // queries a predefined location for settings
@@ -325,9 +412,7 @@ class Description {
             inviteText = this.event.inviteTextTemplate;
             hasTemplate = true;
         } else {
-            inviteText =
-                "Click the following link to join the meeting " +
-                "from your computer: " + BASE_URL + this.event.meetingId;
+            inviteText = INVITE_MESSAGE + " " + BASE_URL + this.event.meetingId;
         }
 
         if (this.event.numbers && Object.keys(this.event.numbers).length > 0) {
@@ -372,11 +457,18 @@ class Description {
      * no meeting scheduled.
      */
     updateInitialButtonURL(location) {
-        var button = $('#jitsi_button a');
-        button.html('Add a ' + LOCATION_TEXT);
-        button.attr('href', '#');
-        button.on('click', e => {
+        let button = $('#jitsi_button');
+        button.html(ADD_BUTTON_TEXT);
+
+        let container = this.event.buttonContainer;
+
+        container.parent().off('click');
+        container.parent().on('click', e => {
             e.preventDefault();
+
+            // Forza l'aggiornamento prima di procedere
+            this.event.updateMeetingId();
+
             this.clickAddMeeting(false, location);
         });
     }
@@ -386,11 +478,21 @@ class Description {
      */
     updateButtonURL() {
         try {
-            var button = $('#jitsi_button a');
-            button.html("Join your " + LOCATION_TEXT + " now");
-            button.off('click');
-            button.attr('href', BASE_URL + this.event.meetingId);
-            button.attr('target', '_new');
+            var button = $('#jitsi_button');
+            button.html(JOIN_BUTTON_TEXT);
+
+            var container = this.event.buttonContainer;
+
+            container.parent().off('click');
+            container.parent().on('click', e => {
+                e.preventDefault();
+
+                // call updateMeetingId, the case where somebody edited location
+                // and then click join now before saving
+                this.event.updateMeetingId();
+
+                window.open(BASE_URL + this.event.meetingId, '_blank');
+            });
         } catch (e) {
             console.log(e);
         }
@@ -833,7 +935,7 @@ class G2Description extends Description {
      */
     updateInitialButtonURL(location) {
         let button = $('#jitsi_button');
-        button.html('Add a ' + LOCATION_TEXT);
+        button.html(ADD_BUTTON_TEXT);
 
         let container = this.event.buttonContainer;
 
@@ -851,7 +953,7 @@ class G2Description extends Description {
     updateButtonURL() {
         try {
             var button = $('#jitsi_button');
-            button.html("Join your " + LOCATION_TEXT + " now");
+            button.html(JOIN_BUTTON_TEXT);
 
             var container = this.event.buttonContainer;
 
@@ -1009,7 +1111,7 @@ class MSLiveDescription extends Description {
      */
     updateInitialButtonURL(location) {
         let button = $('#jitsi_button');
-        button.html('Add a ' + LOCATION_TEXT);
+        button.html(ADD_BUTTON_TEXT);
 
         button.parent().off('click');
         button.parent().on('click', e => {
@@ -1025,7 +1127,7 @@ class MSLiveDescription extends Description {
     updateButtonURL() {
         try {
             var button = $('#jitsi_button');
-            button.html("Join your " + LOCATION_TEXT + " now");
+            button.html(JOIN_BUTTON_TEXT);
 
             button.parent().off('click');
             button.parent().on('click', e => {
@@ -1161,22 +1263,28 @@ function checkAndUpdateCalendar() {
 
                     var jitsiQuickAddButton = $(
                         '<div class="split-tile-right" style="float:left">' +
-                            '<div class="tile-content" ' +
-                                 'style="height: 30px; line-height: 30px;position: relative;">' +
-                                '<div class="right-actions" ' +
-                                     'style="display: inline-block;float: right;margin-right: -16px;">' +
-                                    '<div id="jitsi_button_quick_add" ' +
-                                         'class="goog-inline-block jfk-button jfk-button-action jfk-button-clear-outline" ' +
-                                         'style="left: ' + (numberOfButtons > 1 ? '10' : '0') + 'px;">' +
-                                        'Add a ' + LOCATION_TEXT +
+                            '<div class="tile-content" style="height: 30px; line-height: 30px;position: relative;">' +
+                                '<div class="right-actions" style="display: inline-block;float: right;margin-right: -16px;">' +
+                                    '<div id="jitsi_button_quick_add" class="goog-inline-block jfk-button jfk-button-action jfk-button-clear-outline" style="left: ' + (numberOfButtons > 1 ? '10' : '0') + 'px;">' +
+                                        ADD_BUTTON_TEXT +
                                     '</div>' +
                                 '</div>' +
                             '</div>' +
-                        '</div>');
+                        '</div>'
+                    );
                     lastButtonGroup.before(jitsiQuickAddButton);
                     jitsiQuickAddButton.on('click', function(e) {
                         c.scheduleAutoCreateMeeting = true;
+                        if (c.description && typeof c.description.addDescriptionText === 'function') {
+                            c.updateMeetingId();
+                            var inviteText = c.description.getInviteText();
+                            if (!c.description.value.includes(inviteText) && !window.jitsiInviteJustAdded) {
+                                c.description.addDescriptionText(inviteText);
+                                window.jitsiInviteJustAdded = true;
+                            }
+                        }
                         $('div.edit-button').click();
+                        setTimeout(function() { window.jitsiInviteJustAdded = false; }, 2000);
                     });
                 }, 100);
             }
@@ -1231,33 +1339,88 @@ function checkAndUpdateCalendarG2() {
                         var tabEvent = $(mel).find("#tabEvent");
                         if (tabEvent.length > 0) {
                             var jitsiQuickAddButton = $(
-                                '<content class="" role="tabpanel" id="jitsi_button_quick_add_content"> \
-                                    <div class="fy8IH poWrGb">\
-                                        <div class="FkXdCf HyA7Fb">\
-                                            <div class="DPvwYc QusFJf jitsi_quick_add_icon"/>\
-                                        </div>\
-                                        <div class="mH89We">\
-                                            <div role="button" \
-                                                 class="uArJ5e UQuaGc Y5sE8d" \
-                                                 id="jitsi_button_quick_add">\
-                                                <content class="CwaK9">\
-                                                    <span class="RveJvd jitsi_quick_add_text_size">\
-                                                        Add a ' + LOCATION_TEXT + '\
-                                                    </span>\
-                                                </content>\
-                                            </div>\
-                                        </div>\
-                                    </div>\
-                                </content>');
+                                '<content class="" role="tabpanel" id="jitsi_button_quick_add_content">' +
+                                    '<div class="fy8IH poWrGb">' +
+                                        '<div class="FkXdCf HyA7Fb">' +
+                                            '<div class="DPvwYc QusFJf jitsi_quick_add_icon"/>' +
+                                        '</div>' +
+                                        '<div class="mH89We">' +
+                                            '<div role="button" class="uArJ5e UQuaGc Y5sE8d" id="jitsi_button_quick_add">' +
+                                                '<content class="CwaK9">' +
+                                                    '<span class="RveJvd jitsi_quick_add_text_size">' + ADD_BUTTON_TEXT + '</span>' +
+                                                '</content>' +
+                                            '</div>' +
+                                        '</div>' +
+                                    '</div>' +
+                                '</content>'
+                            );
 
                             $(tabEvent.parent()).append(jitsiQuickAddButton);
 
                             var clickHandler
                                 = jitsiQuickAddButton.find(
                                     '#jitsi_button_quick_add');
+                            
+                            // Funzione per aggiornare il meetingId
+                            function updateMeetingIdFromTitle() {
+                                const titleInput = document.querySelector('input#xTiIn, input[aria-label="Titolo"], input[placeholder="Aggiungi titolo"], input[jsname="YPqjbf"]');
+                                if (titleInput && titleInput.value.trim() !== '') {
+                                    if (c && c.updateMeetingId) {
+                                        c.updateMeetingId();
+                                    }
+                                }
+                            }
+
+                            // Aggiungi listener per i cambiamenti del titolo
+                            function setupTitleListeners() {
+                                const titleInput = document.querySelector('input#xTiIn, input[aria-label="Titolo"], input[placeholder="Aggiungi titolo"], input[jsname="YPqjbf"]');
+                                if (titleInput) {
+                                    // Listener per input
+                                    titleInput.addEventListener('input', updateMeetingIdFromTitle);
+                                    // Listener per change
+                                    titleInput.addEventListener('change', updateMeetingIdFromTitle);
+                                    // Listener per blur
+                                    titleInput.addEventListener('blur', updateMeetingIdFromTitle);
+                                }
+                            }
+
+                            // Setup iniziale dei listener
+                            setupTitleListeners();
+
+                            // Polling per assicurarsi di catturare il titolo
+                            let titlePollingInterval = setInterval(() => {
+                                const titleInput = document.querySelector('input#xTiIn, input[aria-label="Titolo"], input[placeholder="Aggiungi titolo"], input[jsname="YPqjbf"]');
+                                if (titleInput) {
+                                    setupTitleListeners();
+                                }
+                            }, 1000);
+
+                            // Pulisci l'intervallo dopo 30 secondi
+                            setTimeout(() => {
+                                clearInterval(titlePollingInterval);
+                            }, 30000);
+
                             clickHandler.on('click', function (e) {
+                                e.preventDefault();
                                 c.scheduleAutoCreateMeeting = true;
-                                $('div[role="button"][jsname="rhPddf"]').click();
+                                
+                                // Forza l'aggiornamento del meetingId prima di tutto
+                                updateMeetingIdFromTitle();
+                                
+                                // Usa setTimeout per assicurarsi che il DOM sia aggiornato
+                                setTimeout(() => {
+                                    if (c.description && typeof c.description.addDescriptionText === 'function') {
+                                        // Forza nuovamente l'aggiornamento del meetingId
+                                        c.updateMeetingId();
+                                        var inviteText = c.description.getInviteText();
+                                        if (!c.description.value.includes(inviteText) && !window.jitsiInviteJustAdded) {
+                                            c.description.addDescriptionText(inviteText);
+                                            window.jitsiInviteJustAdded = true;
+                                        }
+                                    }
+                                    $('div[role="button"][jsname="rhPddf"]').click();
+                                    setTimeout(function() { window.jitsiInviteJustAdded = false; }, 2000);
+                                }, 0);
                             });
 
                             return;

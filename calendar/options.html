@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Impostazioni Jitsi Meetings</title>
+    <style>
+        body {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+    </style>
+</head>
+<body>
+    <h1>Impostazioni Jitsi Meetings</h1>
+    <form id="optionsForm">
+        <div class="form-group">
+            <label for="baseDomain">Dominio Jitsi:</label>
+            <input type="text" id="baseDomain" placeholder="es. meet.jit.si">
+            <small>Inserisci il dominio della tua istanza Jitsi (senza https://)</small>
+        </div>
+
+        <div class="form-group">
+            <label for="addButtonText">Testo Pulsante Aggiungi:</label>
+            <input type="text" id="addButtonText" placeholder="es. Add a Jitsi Meeting">
+            <small>Testo mostrato quando si aggiunge una nuova riunione</small>
+        </div>
+
+        <div class="form-group">
+            <label for="joinButtonText">Testo Pulsante Partecipa:</label>
+            <input type="text" id="joinButtonText" placeholder="es. Join your Jitsi Meeting now">
+            <small>Testo mostrato quando si partecipa a una riunione esistente</small>
+        </div>
+
+        <div class="form-group">
+            <label for="inviteMessage">Messaggio di Invito:</label>
+            <input type="text" id="inviteMessage" placeholder="es. Click the following link to join the meeting from your computer:">
+            <small>Messaggio mostrato nella descrizione dell'evento</small>
+        </div>
+
+        <button type="submit">Salva Impostazioni</button>
+    </form>
+    <div id="status" class="status" style="display: none;"></div>
+
+    <script src="options.js"></script>
+</body>
+</html> 
